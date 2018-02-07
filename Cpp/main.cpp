@@ -1,166 +1,194 @@
 #include <iostream>
 #include <fstream>
-#include <sstream>
-#include <string>
-#include <vector>
 #include <cmath>
-#include <limits>
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <time.h>
+class Vector {
+public:
+    Vector() {
+        x = 0.0;
+        y = 0.0;
+        z = 0.0;
+    }
+    Vector(double x, double y, double z) {
+        this->x = x;
+        this->y = y;
+        this->z = z;
+    }
 
-struct RGB {
-    unsigned char red;
-    unsigned char green;
-    unsigned char blue;
+    Vector operator-(const Vector& other) const {
+        double x = this->x - other.x;
+        double y = this->y - other.y;
+        double z = this->z - other.z;
+        return Vector(x, y, z);
+    }
+
+    Vector operator+(const Vector& other) const {
+        double x = this->x + other.x;
+        double y = this->y + other.y;
+        double z = this->z + other.z;
+        return Vector(x, y, z);
+    }
+
+    // Dot product
+    double operator*(const Vector& other) const {
+        return this->x * other.x + this->y * other.y + this->z * other.z;
+    }
+
+    Vector operator*(const double& constant) const {
+        double x = this->x * constant;
+        double y = this->y * constant;
+        double z = this->z * constant;
+        return Vector(x, y, z);
+    }
+
+    Vector operator/(const double& constant) const {
+        double x = this->x / constant;
+        double y = this->y / constant;
+        double z = this->z / constant;
+        return Vector(x, y, z);
+    }
+
+    Vector normalize() const {
+        double mg = sqrt(this->x * this->x + this->y * this->y + this->z * this->z);
+        return Vector(this->x / mg, this->y / mg, this->z / mg);
+    }
+
+private:
+    double x;
+    double y;
+    double z;
 };
 
-void saveBMP (const char file_name[], const int& width, const int& height, const int& dpi, const RGB data[]) {    
-    FILE *f;
-    const int file_header_size = 14;
-    const int file_info_size = 40;
-    const int header_size = file_header_size + file_info_size;
-    const int color_size = 4;
-    
-    const int num_colors = width * height;
-    const int data_size = num_colors * color_size;
-    const int file_size = header_size + data_size;
-
-    int pixels_per_meter = dpi * 39; // 39 = ???
-
-    unsigned char bmp_file_header[file_header_size] = 
-        {
-            'B', 'M', 
-            (unsigned char)file_size,            
-            (unsigned char)file_size >> 8, 
-            (unsigned char)file_size >> 16, 
-            (unsigned char)file_size >> 24, 
-            0, 0, 0, 0, 
-            header_size, 0, 0, 0
-        };
-
-    unsigned char bmp_info_header[file_info_size] = 
-        {
-            40, 0, 0, 0,
-            (unsigned char)width,            
-            (unsigned char)width >> 8, 
-            (unsigned char)width >> 16, 
-            (unsigned char)width >> 24, 
-            (unsigned char)height,            
-            (unsigned char)height >> 8, 
-            (unsigned char)height >> 16, 
-            (unsigned char)height >> 24, 
-            1, 0, 24, 0, 
-            0, 0, 0, 0,
-            0,
-            (unsigned char)data_size,            
-            (unsigned char)data_size >> 8, 
-            (unsigned char)data_size >> 16, 
-            (unsigned char)data_size >> 24, 
-            (unsigned char)pixels_per_meter,            
-            (unsigned char)pixels_per_meter >> 8, 
-            (unsigned char)pixels_per_meter >> 16, 
-            (unsigned char)pixels_per_meter >> 24, 
-            (unsigned char)pixels_per_meter,            
-            (unsigned char)pixels_per_meter >> 8, 
-            (unsigned char)pixels_per_meter >> 16, 
-            (unsigned char)pixels_per_meter >> 24, 
-
-        };
-
-
-    f = fopen(file_name, "wb");
-    fwrite(bmp_file_header, 1, 14, f);
-    fwrite(bmp_info_header, 1, 14, f);
-
-    for (int i = 0; i < num_colors; i++) {
-        RGB rgb = data[i];
-
-        unsigned char color[3] = {255, 255, 255};
-
-        fwrite(color, 1, 3, f);
+class Ray {
+public:
+    Ray(Vector origin, Vector direction) {
+        this->origin = origin;
+        this->direction = direction;
     }
-}
+
+    const Vector& getOrigin() const {
+        return origin;
+    }
+
+    const Vector& getDirection() const {
+        return direction;
+    }
+
+private:
+    Vector origin;
+    Vector direction;
+};
+
+class Sphere {
+public:
+    Sphere(Vector center, double radius){
+        this->center = center;
+        this->radius = radius;
+    }
+
+    bool intersect(const Ray& ray, double &t) {
+        Vector origin = ray.getOrigin();
+        Vector direction = ray.getDirection();
+        Vector diff = origin - this->center;
+
+        double b = 2* (diff * direction);
+        double c = diff * diff - this->radius * this->radius;
+        double disc = b * b - 4 * c;
+        if (disc < 1e-4) return false;
+        else {
+            disc = sqrt(disc);
+            double t0 = -b-disc;
+            double t1 = -b+disc;
+
+            t = (t0 < t1) ? t0 : t1;
+            return true;
+
+        }
+
+        return true;
+    }
+
+    Vector getNormal(Vector pi) {return (this->center-pi)/this->radius;}
+
+    const Vector& getCenter() const {return this->center;}
+    const double& getRadius() const {return this->radius;}
+
+private:
+    Vector center;
+    double radius;
+};
+
+struct Color {
+    double red;
+    double green;
+    double blue;
+
+    Color() {
+        this->red = 0;
+        this->green = 0;
+        this->blue = 0;
+    }
+    Color(double red, double green, double blue) {
+        this->red = red;
+        this->green = green;
+        this->blue = blue;
+    }
+    Color operator*(double d) const {
+        return Color(this->red * d, this->green * d, this->blue * d);
+    }
+};
+
+std::ostream& operator<< (std::ostream& stream, const Color& pixel) {
+    return stream << (int)pixel.red << ' ' << (int)pixel.green << ' ' << (int)pixel.blue << std::endl;;
+};
 
 int main(int argc, char** argv) {
+    std::cout << "???" << std::endl;
+    return 0;
+    
+    const int height = 500;
+    const int width = 500;
 
-    const int dpi = 72;
-    const int height = 2;
-    const int width = 2;
+
 
     std::ofstream out("out.ppm");
-    // out << "P6\n" << width << ' ' << height << "\n255" <<;
+    out << 'P' << '3' << '\n';
+    out << width << ' ' << height << '\n';
+    out << '2' << '5' << '5' << '\n';
+        
+    Color pixels[height][width];
 
-    // RGB pixels[width * height] = {};
+    Color white(255, 255, 255);
+    Sphere sphere(Vector(width/2, height/2, 50), 50);
+    Sphere light(Vector(width/2, 0, 50), 1);
 
-    // out << (char)255 << (char)0 << (char)0;
-    // out << (char)255 << (char)255 << (char)0;
-    // out << (char)255 << (char)0 << (char)255;
-    // out << (char)0 << (char)255 << (char)255;
-
-    out << 'P' << '6' << ' ';
-    out << '2' << ' ' << '2' << ' ';
-    out << '2' << '5' << '5' << ' ';
-
-    out << (char)255 << (char)0 << (char)0;
-    out << (char)0 << (char)255 << (char)0;
-    out << (char)0 << (char)0 << (char)255;
-    out << (char)255 << (char)255 << (char)255;
-
-
-    std::cout               << (char)0x50 << (char)0x36 << (char)0x0D << (char)0x0A;
-    std::cout << (char)0x32 << (char)0x20 << (char)0x32 << (char)0x0D << (char)0x0A;
-    std::cout << (char)0x32 << (char)0x35 << (char)0x35 << (char)0x0D << (char)0x0A;
-    std::cout               << (char)0xFF << (char)0x00 << (char)0x00;
-    std::cout               << (char)0x00 << (char)0xFF << (char)0x00;
-    std::cout               << (char)0x00 << (char)0x00 << (char)0xFF;
-    std::cout               << (char)0xFF << (char)0xFF << (char)0xFF;
-    // char buffer[] = {
-    //     'P', '6', '\n',
-    //     '2', ' ', '2', '\n',
-    //     '2', '5', '5', '\n',
-    //     255, 0, 0,
-    //     0, 255, 255,
-    //     0, 0, 255,
-    //     0, 255, 0
-    // };
-
-    // std::cout << sizeof(buffer) << ' ' << sizeof(buffer[0]);
-
-    // FILE *file = fopen("idk.ppm", "wb");
-    // fwrite(buffer, 1, sizeof(27), file);
-    // fclose(file);
-
-    // out << (char)0 << (char)250 << (char)0;
-    // out << (char)0 << (char)250 << (char)0;
-    // out << (char)0 << (char)250 << (char)0;
-    // out << (char)0 << (char)250 << (char)0;
-
-    // out << (char)0 << (char)0 << (char)250;
-    // out << (char)0 << (char)0 << (char)250;
-    // out << (char)0 << (char)0 << (char)250;
-    // out << (char)0 << (char)0 << (char)250;
-
-    // out << (char)255 << (char)0 << (char)0;
-    // out << (char)255 << (char)0 << (char)0;
-    // out << (char)255 << (char)0 << (char)0;
-    // out << (char)255 << (char)0 << (char)0;
-
-
-    int current_index = 0;
+    // For each pixel
     for (int y = 0; y < height; ++y) {
         for (int x = 0; x < width; ++x) {
-            current_index = y * width + x;
+            // Send ray
+            Ray ray(Vector(x, y, 0), Vector(0, 0, 1));
 
+            double t = 20000;
+            // 
+            std::cout << x << ' ' << y << std::endl;
+            if (sphere.intersect(ray, t)) {        
+                std::cout << t << std::endl;        
+                Vector pi = ray.getOrigin() + ray.getDirection() * t;
 
-            // pixels[current_index].red = 255;
-            // pixels[current_index].green = 0;
-            // pixels[current_index].blue = 198;
+                Vector L = light.getCenter() - pi;
+                Vector N = sphere.getNormal(pi);
+                double dt = L.normalize() * N.normalize();
+
+                std::cout << dt << std::endl;
+                return 0;
+
+                out << white * dt;
+
+            } else {
+                out << Color(0, 0, 0);;
+            }
         }
     }
-
-    // saveBMP("my_first_bmp.bmp", width, height, dpi, pixels);
 
     return 0;
 }
