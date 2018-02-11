@@ -23,6 +23,6 @@ let clamp (r, g, b) =
     (r', g', b')
 
 type Colour with
-  static member ( + ) (RGB(r1,g1,b1),RGB(r2,g2,b2)) = RGB ()
+  static member ( + ) (RGB(r1,g1,b1),RGB(r2,g2,b2)) = RGB (clamp (r1 + r2, g1 + g2, b1 + b2))
   static member ( * ) (RGB(r1,g1,b1),RGB(r2,g2,b2)) = ...
   static member ( * ) (s,c) = ...
