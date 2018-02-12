@@ -11,6 +11,6 @@ val getR : Colour -> float
 val getG : Colour -> float 
 val getB : Colour -> float
 val scale: Colour -> float -> Colour
-val merge : (Colour -> Colour -> Colour) -> Colour -> Colour -> Colour
+val merge : float -> Colour -> Colour -> Colour
 val toColor : Colour -> System.Drawing.Color
 val fromColor : System.Drawing.Color -> Colour
