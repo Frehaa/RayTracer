@@ -8,7 +8,7 @@ T    = F Topt .
 Topt = "*" F Topt | e .
 F    = P Fopt .
 Fopt = "^" Int | e .
-P    = Int [ Float | Var | "(" E ")" .
+P    = Int | Float | Var | "(" E ")" .
 
 e is the empty sequence.
 *)
@@ -62,20 +62,21 @@ let scan s =
     | _ -> raise Scanerror
   sc (explode s)
   
+ // 2x(2x)",[Int 2; Var "x"; Lpar; Int 2; Var "x"; Rpar])
 let rec insertMult = function
-  Float r :: Var x :: ts -> [] // TO DO
-| Float r1 :: Float r2 :: ts -> [] // TO DO
-| Float r :: Int i :: ts -> [] // TO DO
-| Var x :: Float r :: ts -> [] // TO DO
-| Var x1 :: Var x2 :: ts -> [] // TO DO
-| Var x :: Int i :: ts -> [] // TO DO
-| Int i :: Float r :: ts -> [] // TO DO
-| Int i :: Var x :: ts -> [] // TO DO
-| Int i1 :: Int i2 :: ts -> [] // TO DO
-| Float r :: Lpar :: ts -> [] // TO DO
-| Var x :: Lpar :: ts -> [] // TO DO
-| Int i :: Lpar :: ts -> [] // TO DO
-| t :: ts -> t :: insertMult ts
+  Float r   :: Var x    :: ts -> [Float r; Mul] @ insertMult (Var x::ts)
+| Float r1  :: Float r2 :: ts -> [Float r1; Mul] @ insertMult (Float r2::ts)
+| Float r   :: Int i    :: ts -> [Float r; Mul] @ insertMult (Int i::ts)
+| Var x     :: Float r  :: ts -> [Var x; Mul] @ insertMult (Float r::ts)
+| Var x1    :: Var x2   :: ts -> [Var x1; Mul] @ insertMult (Var x2::ts)
+| Var x     :: Int i    :: ts -> [Var x; Mul] @ insertMult (Int i::ts)
+| Int i     :: Float r  :: ts -> [Int i; Mul] @ insertMult (Float r::ts)
+| Int i     :: Var x    :: ts -> [Int i; Mul] @ insertMult (Var x::ts)
+| Int i1    :: Int i2   :: ts -> [Int i1; Mul] @ insertMult (Int i2::ts)
+| Float r   :: Lpar     :: ts -> [Float r; Mul;Lpar] @ insertMult ts
+| Var x     :: Lpar     :: ts -> [Var x; Mul;Lpar] @ insertMult ts
+| Int i     :: Lpar     :: ts -> [Int i; Mul;Lpar] @ insertMult ts
+| t         :: ts -> t  :: insertMult ts
 | [] -> []
   
 type expr = 
@@ -87,16 +88,62 @@ type expr =
 
 exception Parseerror
 
-let rec E (ts:terminal list) = (T >> Eopt) ts
+(* Grammar:
+
+E    = T Eopt .
+Eopt = "+" T Eopt | e .
+T    = F Topt .
+Topt = "*" F Topt | e .
+F    = P Fopt .
+Fopt = "^" Int | e .
+P    = Int | Float | Var | "(" E ")" .
+
+e is the empty sequence.
+*)
+
+
+let rec E = (T >> Eopt)
 and Eopt (ts, inval) = 
   match ts with
-    Add :: tr -> ...
+  |  Add :: tr -> let (ts1, tv) = T tr
+                  Eopt (ts1, FAdd(inval, tv))
   | _ -> (ts, inval)
-and T ts = ...
-and Topt (ts, inval) = ... 
-and F ts = ...
-and Fopt (ts,inval) = ...
-and P ts = ...
+and T = (F >> Topt)
+and Topt (ts, inval) = 
+  match ts with
+  | Mul::tr -> let (ts1, fv) = F tr
+               Topt (ts1, FMult(inval, fv))
+  | _ -> (ts, inval)
+and F = (P >> Fopt)
+and Fopt (ts,inval) = 
+  match ts with
+  | Pwr :: tr -> match tr with
+                 | Int v :: tr' -> (tr', FExponent (inval, v))
+                 | _ -> raise Parseerror
+  | _ -> (ts, inval)
+and P ts = 
+  match ts with
+  | Int v :: tr -> (tr, FNum (float v))
+  | Float v :: tr -> (tr, FNum v)
+  | Var v :: tr -> (tr, FVar v)
+  | Lpar :: tr -> let (ts1, tv) = E tr
+                  match ts1 with
+                  | Rpar :: tr1 -> (tr1, tv)
+                  | _ -> raise Parseerror
+  | _ -> raise Parseerror
+
+(* Grammar:
+
+E    = T Eopt .
+Eopt = "+" T Eopt | e .
+T    = F Topt .
+Topt = "*" F Topt | e .
+F    = P Fopt .
+Fopt = "^" Int | e .
+P    = Int | Float | Var | "(" E ")" .
+
+e is the empty sequence.
+*)
 
 let parse ts = 
   match E ts with

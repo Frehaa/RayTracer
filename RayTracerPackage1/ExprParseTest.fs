@@ -1,8 +1,10 @@
+module ExprParseTest
+
 open System.Threading
 open System.Globalization
 Thread.CurrentThread.CurrentCulture <- CultureInfo.InvariantCulture
 
-module ExprParseTest
+
 
 open ExprParse
 
