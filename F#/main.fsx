@@ -1,5 +1,5 @@
-#r @"D:\Workspace\RayTracer\F#\vector.dll"
-#r @"D:\Workspace\RayTracer\F#\color.dll"
+#r @"C:\Workspace\RayTracer\F#\vector.dll"
+#r @"C:\Workspace\RayTracer\F#\color.dll"
 open Vector
 open Color
 open System.IO
@@ -46,15 +46,23 @@ let main args =
             let shortest = min x1 x2
             sendRay origin target shapes' (min distance shortest)
 
+    let hit t = (if 1.0 <= t && t <= 10000.0 then red else black)
+
+    let calcColor P N l =
+        0.75        
 
     for y in [-height/2 .. (height / 2) - 1] do
         for x in [-width/2 .. (width / 2) - 1] do        
             let V = make ((float x * vw / float width) , (float y * vh / float height), d)
             let t = sendRay origin V shapes infinity
             let P = origin + V * t
+            let Circle(C, _)::_ = shapes 
+            let N = P - C
             let L = lightSource - P
+            
+            
 
-            bf.WriteLine (if 1.0 <= t && t <= 10000.0 then string red else string black)
+            bf.WriteLine (string (calcColor P (P - circleCenter)*  hit t))
 
     bf.Close ()
     0;;
