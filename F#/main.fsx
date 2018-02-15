@@ -1,7 +1,6 @@
 #r @"C:\Workspace\RayTracer\F#\vector.dll"
 #r @"C:\Workspace\RayTracer\F#\color.dll"
-open Vector
-open Color
+
 open System.IO
 
 type Shape = 
@@ -17,7 +16,8 @@ let main args =
     let (vw, vh, d) as view = 
         let ar = float width / float height
         (1. * ar , 1., 1.)    
-    let shapes = [Circle (make (0.0, 0.0, 100.0), 40.0)]
+    let circleCenter = make (0.0, 0.0, 100.0)
+    let shapes = [Circle (circleCenter, 40.0)]
     let lightSource = make (0.0, 100.0, 100.0)
 
     let discriminant b a c = b * b - 4.0 * a * c
@@ -46,10 +46,15 @@ let main args =
             let shortest = min x1 x2
             sendRay origin target shapes' (min distance shortest)
 
-    let hit t = (if 1.0 <= t && t <= 10000.0 then red else black)
+    let calcLight P N = 
+        let ambientLight = 0.10
+        let L = make (0., -1., 0.)
+        let n_dot_l  = N * L
+        if n_dot_l > 0. then
+            ambientLight + 0.90 * n_dot_l/((Vector.norm N) * (Vector.norm L))
+        else 
+            ambientLight
 
-    let calcColor P N l =
-        0.75        
 
     for y in [-height/2 .. (height / 2) - 1] do
         for x in [-width/2 .. (width / 2) - 1] do        
@@ -59,10 +64,11 @@ let main args =
             let Circle(C, _)::_ = shapes 
             let N = P - C
             let L = lightSource - P
-            
-            
 
-            bf.WriteLine (string (calcColor P (P - circleCenter)*  hit t))
+            let N = Vector.normalize (P - circleCenter)
+            let color = (if 1.0 <= t && t <= 10000.0 then red else black)            
+            (color * calcLight P N) |> string |> bf.WriteLine
+
 
     bf.Close ()
     0;;
