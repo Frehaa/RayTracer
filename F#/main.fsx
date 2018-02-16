@@ -1,24 +1,32 @@
 #r @"C:\Workspace\RayTracer\F#\vector.dll"
-#r @"C:\Workspace\RayTracer\F#\color.dll"
+#r @"C:\Workspace\RayTracer\F#\point.dll"
+#r @"C:\Workspace\RayTracer\F#\colour.dll"
 
 open System.IO
+open Vector
+open Point
+open Colour
 
 type Shape = 
-    | Circle of Vector * float
+    | Circle of Point * float
+
+type Light = 
+    | Directional of Vector * float
+    | Point of Point * float
+    | Ambient of float
 
 [<EntryPoint>]
 let main args =
     if Array.length args < 2 then failwith "Not enough arguments"
     else
-    let origin = make (0.0, 0.0, 0.0) // Camera origin
-    let (width, height) as canvas = 
-        (int args.[0], int args.[1])    
+    let (width, height) as canvas = (int args.[0], int args.[1])    
+    let origin = mkPoint 0.0 0.0 0.0 // Camera origin
     let (vw, vh, d) as view = 
         let ar = float width / float height
         (1. * ar , 1., 1.)    
-    let circleCenter = make (0.0, 0.0, 100.0)
-    let shapes = [Circle (circleCenter, 40.0)]
-    let lightSource = make (0.0, 100.0, 100.0)
+    let shapes = [Circle (mkPoint 0.0 0.0 100.0, 40.0)]
+    let lights = [Ambient 0.05; Directional (mkVector 0.0 -1.0 0.0, 0.7); Point (mkPoint 100.0 -25.0 -10.0, 0.25)]
+
 
     let discriminant b a c = b * b - 4.0 * a * c
     let solve b a d = ((-b - (sqrt d))/(2.0 * a), (-b + sqrt d)/(2.0 * a))
@@ -33,7 +41,7 @@ let main args =
     bf.WriteLine (System.String.Format ("{0} {1}", width, height))
     bf.WriteLine "255"
     
-    let rec sendRay origin target shapes distance =
+    let rec sendRay (origin : Point) (target : Point) shapes distance =
         let D = target - origin
         match shapes with 
         | []            -> distance
@@ -45,20 +53,21 @@ let main args =
             let (x1, x2) = circleIntersection a b c r
             let shortest = min x1 x2
             sendRay origin target shapes' (min distance shortest)
+        | _ -> failwith "Unhandled shape"           
 
     let calcLight P N = 
         let ambientLight = 0.10
-        let L = make (0., -1., 0.)
+        let L = mkVector 0. -1. 0.
         let n_dot_l  = N * L
         if n_dot_l > 0. then
-            ambientLight + 0.90 * n_dot_l/((Vector.norm N) * (Vector.norm L))
+            ambientLight + 0.90 * n_dot_l/((Vector.magnitude N) * (Vector.magnitude L))
         else 
             ambientLight
 
 
     for y in [-height/2 .. (height / 2) - 1] do
         for x in [-width/2 .. (width / 2) - 1] do        
-            let V = make ((float x * vw / float width) , (float y * vh / float height), d)
+            let V = mkPoint (float x * vw / float width) (float y * vh / float height) d
             let t = sendRay origin V shapes infinity
             let P = origin + V * t
             let Circle(C, _)::_ = shapes 
