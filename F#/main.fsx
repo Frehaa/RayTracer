@@ -64,19 +64,25 @@ let main args =
         else 
             ambientLight
 
+    let red = mkColour 1.0 0.0 0.0
+    let black = mkColour 0.0 0.0 0.0
+
+    let CanvasPoint = mkPoint 0.0 0.0 1.0 
+    let V = mkVector 0.0 0.0 1.0
+   
+    let colourToString c = string (int(Colour.getR c)) + " " + string (int(Colour.getG c)) + " " + string (int(Colour.getB c))
 
     for y in [-height/2 .. (height / 2) - 1] do
         for x in [-width/2 .. (width / 2) - 1] do        
-            let V = mkPoint (float x * vw / float width) (float y * vh / float height) d
-            let t = sendRay origin V shapes infinity
-            let P = origin + V * t
+            let C = mkPoint (float x * vw / float width) (float y * vh / float height) d
+            let V = distance origin C
+            let t = sendRay origin C shapes infinity
+            // let P = origin + V * t
+            let P = Point.move origin (t * V)
             let Circle(C, _)::_ = shapes 
             let N = P - C
-            let L = lightSource - P
-
-            let N = Vector.normalize (P - circleCenter)
             let color = (if 1.0 <= t && t <= 10000.0 then red else black)            
-            (color * calcLight P N) |> string |> bf.WriteLine
+            ((calcLight P N) * 255.0 * color) |> colourToString |> bf.WriteLine
 
 
     bf.Close ()
