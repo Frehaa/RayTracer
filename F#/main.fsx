@@ -1,6 +1,7 @@
-#r @"C:\Workspace\RayTracer\F#\vector.dll"
-#r @"C:\Workspace\RayTracer\F#\point.dll"
-#r @"C:\Workspace\RayTracer\F#\colour.dll"
+#r @"D:\Workspace\RayTracer\F#\vector.dll"
+open System
+#r @"D:\Workspace\RayTracer\F#\Point.dll"
+#r @"D:\Workspace\RayTracer\F#\Colour.dll"
 
 open System.IO
 open Vector
@@ -9,38 +10,44 @@ open Colour
 
 type Shape = 
     | Circle of Point * float
+    | Plane of Vector * float * float
+
+// For calculating circle intersection
+let discriminant b a c = b * b - 4.0 * a * c
+let solve b a d = ((-b - (sqrt d))/(2.0 * a), (-b + sqrt d)/(2.0 * a))
+let circleIntersection a b c r = 
+    let d = discriminant b a (c - r * r)
+    if d < 0. then (infinity, infinity)
+    else solve b a d
+
+type Intensity = float
 
 type Light = 
-    | Directional of Vector * float
-    | Point of Point * float
-    | Ambient of float
+    | Directional of Vector * Intensity
+    | Point of Point * Intensity
+    | Ambient of Intensity
 
 [<EntryPoint>]
 let main args =
     if Array.length args < 2 then failwith "Not enough arguments"
     else
-    let (width, height) as canvas = (int args.[0], int args.[1])    
+    // Setup environment
+    let (width, height) as canvas = (int args.[0], int args.[1])
     let origin = mkPoint 0.0 0.0 0.0 // Camera origin
-    let (vw, vh, d) as view = 
+    let (vw, vh, d) as viewport = 
         let ar = float width / float height
         (1. * ar , 1., 1.)    
     let shapes = [Circle (mkPoint 0.0 0.0 100.0, 40.0)]
-    let lights = [Ambient 0.05; Directional (mkVector 0.0 -1.0 0.0, 0.7); Point (mkPoint 100.0 -25.0 -10.0, 0.25)]
+    let lights = [Directional (mkVector 0.0 1.0 0.0, 0.7); ] // Ambient 0.05;  Point (mkPoint 100.0 -25.0 -10.0, 0.25)]
+   
+    // For circles we want to solve t^2(D * D) + t(2(OC * D)) + OC * OC - r^2 = 0
+    // Where     
+    //  O = camera origin
+    //  V = point in the viewport
+    //  C = circle center
+    //  OC = O - C
+    //  D = V - O    
 
-
-    let discriminant b a c = b * b - 4.0 * a * c
-    let solve b a d = ((-b - (sqrt d))/(2.0 * a), (-b + sqrt d)/(2.0 * a))
-    let circleIntersection a b c r = 
-        let d = discriminant b a (c - r * r)
-        if d < 0. then (infinity, infinity)
-        else solve b a d
-
-    let bf = new StreamWriter(new FileStream("img.ppm", FileMode.OpenOrCreate))
-
-    bf.WriteLine "P3"
-    bf.WriteLine (System.String.Format ("{0} {1}", width, height))
-    bf.WriteLine "255"
-    
     let rec sendRay (origin : Point) (target : Point) shapes distance =
         let D = target - origin
         match shapes with 
@@ -55,35 +62,50 @@ let main args =
             sendRay origin target shapes' (min distance shortest)
         | _ -> failwith "Unhandled shape"           
 
-    let calcLight P N = 
-        let ambientLight = 0.10
-        let L = mkVector 0. -1. 0.
-        let n_dot_l  = N * L
-        if n_dot_l > 0. then
-            ambientLight + 0.90 * n_dot_l/((Vector.magnitude N) * (Vector.magnitude L))
+
+    let calcDiffuse n l i = 
+        let nl = Vector.dotProduct n l
+        if nl > 0. then
+            i * nl / (Vector.magnitude n * Vector.magnitude l)
         else 
-            ambientLight
+            0.
+        
+    let rec calcLight' p n a = function
+        | [] -> a
+        | Ambient(i):: ls -> calcLight' p n (a + i) ls
+        | Directional(d, i)::ls-> calcLight' p n (a + calcDiffuse n d i) ls
+        | Point(c, i):: ls -> 
+            let d = n - p
+            calcLight' p n (a + calcDiffuse n d i) ls
+
+    let calcLight point normal lights = calcLight' point normal 0.0 lights
 
     let red = mkColour 1.0 0.0 0.0
     let black = mkColour 0.0 0.0 0.0
+       
+    let colourToString c =
+        let c = Colour.scale c 255.0
+        string (int(Colour.getR c)) + " " + string (int(Colour.getG c)) + " " + string (int(Colour.getB c))
 
-    let CanvasPoint = mkPoint 0.0 0.0 1.0 
-    let V = mkVector 0.0 0.0 1.0
-   
-    let colourToString c = string (int(Colour.getR c)) + " " + string (int(Colour.getG c)) + " " + string (int(Colour.getB c))
+    let pointToVector p = let (x, y, z) = Point.getCoord p in Vector.mkVector x y z        
+
+    // Writing to ppm
+    let bf = new StreamWriter(new FileStream("img.ppm", FileMode.OpenOrCreate))
+    bf.WriteLine "P3"
+    bf.WriteLine (System.String.Format ("{0} {1}", width, height))
+    bf.WriteLine "255"
 
     for y in [-height/2 .. (height / 2) - 1] do
         for x in [-width/2 .. (width / 2) - 1] do        
-            let C = mkPoint (float x * vw / float width) (float y * vh / float height) d
-            let V = distance origin C
-            let t = sendRay origin C shapes infinity
-            // let P = origin + V * t
+            let viewPoint = mkPoint (float x * vw / float width) (float y * vh / float height) d
+            let V = distance origin viewPoint
+            let t = sendRay origin viewPoint shapes infinity
+            
             let P = Point.move origin (t * V)
             let Circle(C, _)::_ = shapes 
             let N = P - C
             let color = (if 1.0 <= t && t <= 10000.0 then red else black)            
-            ((calcLight P N) * 255.0 * color) |> colourToString |> bf.WriteLine
-
+            ((calcLight (pointToVector P) N lights) * color) |> colourToString |> bf.WriteLine
 
     bf.Close ()
     0;;
