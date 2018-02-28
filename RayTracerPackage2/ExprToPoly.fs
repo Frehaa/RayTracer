@@ -1,8 +1,9 @@
 module ExprToPoly
 
-(*#load "ExprParse.fs"*)
+#load "ExprParse.fs"
 
 open ExprParse
+open System.Windows.Forms
 type expr = ExprParse.expr
 
 let rec ppExpr = function
@@ -12,10 +13,80 @@ let rec ppExpr = function
   | FMult(e1,e2) -> (ppExpr e1) + " * " + (ppExpr e2)
   | FExponent(e,n) -> "(" + (ppExpr e) + ")^" + string(n)
 
-let rec subst e (x,ex) =
+let rec subst e (x, ex) =
   match e with    
-  | FNum c -> FNum c
-  | FVar s -> failwith "TO BE IMPLEMENTED"
+  | FNum c              -> FNum c
+  | FVar s when s = x   -> ex
+  | FVar s              -> FVar s
+  | FExponent(e1, i)    -> FExponent(subst e1 (x, ex), i)
+  | FAdd(e1, e2)        -> FAdd(subst e1 (x, ex), subst e2 (x, ex))
+  | FMult(e1, e2)       -> FMult(subst e1 (x, ex), subst e2 (x, ex))
+
+// TESTING
+// let sphere = FAdd(
+//                 FAdd(
+//                   FAdd(
+//                     FExponent(FVar "x", 2),
+//                     FExponent(FVar "y", 2)
+//                   ),
+//                   FExponent(FVar "z", 2)
+//                 ),
+//                 FMult(FNum -1.0, FVar "R"))
+
+// let ex = FAdd(FVar "px", FMult(FVar "t",FVar "dx"))
+// let ey = FAdd(FVar "py", FMult(FVar "t",FVar "dy"))
+// let ez = FAdd(FVar "pz", FMult(FVar "t",FVar "dz"))
+// let eR = FNum -1.0
+
+// let sphereSubst = List.fold subst sphere [("x",ex);("y",ey);("z",ez);("R",eR);]
+
+// ppExpr sphere
+// ppExpr sphereSubst
+
+// TESTING END
+
+// Explaining
+
+// We want to transform something like the following sphere into a polynomial
+// let sphere = FAdd(
+//                 FAdd(
+//                   FAdd(
+//                     FExponent(FVar "x", 2),
+//                     FExponent(FVar "y", 2)
+//                   ),
+//                   FExponent(FVar "z", 2)
+//                 ),
+//                 FMult(FNum -1.0, FVar "R"))
+
+
+// First though, we want to substitude x, y, z to solve for a variable t
+// This produces a new abstract syntax tree
+// let sphereSubst : expr =
+//   FAdd
+//     (FAdd
+//        (FAdd
+//           (FExponent (FAdd (FVar "px",FMult (FVar "t",FVar "dx")),2),
+//            FExponent (FAdd (FVar "py",FMult (FVar "t",FVar "dy")),2)),
+//         FExponent (FAdd (FVar "pz",FMult (FVar "t",FVar "dz")),2)),
+//      FMult (FNum -1.0,FNum -1.0))
+
+// Next we want to simplify the AST to a list of lists of values, so called atoms
+// Atoms are the smallest values of either a float or a variable with some exponent (0 or 1 being a possibility)
+// These atoms a grouped in a list, all the atoms in this list are implicitly multiplied together. 
+// [ANum 5.0; AExponent "x", 2] = 5x^2
+
+// These groups of atoms are grouped together with other groups of atoms, forming another list (a list of lists of atoms)
+// these lists are implicitly added together
+// [[ANum 5.0];[ANum 6.0]] = 5 + 6
+
+// These lists of lists we call the simplified expression
+
+// But something like [[ANum 5.0];[ANum 6.0]] can be simplified to [[ANum 11.0]]
+// So next step is to go through the simplified expression and reduce the components
+// This can be done by first simplifying each of the atom groups (the inner list of the list of lists of atoms)
+
+// Explaining end
+
 
 type atom = ANum of float | AExponent of string * int
 type atomGroup = atom list  
@@ -29,29 +100,99 @@ let ppAtom = function
 let ppAtomGroup ag = String.concat "*" (List.map ppAtom ag)
 let ppSimpleExpr (SE ags) = String.concat "+" (List.map ppAtomGroup ags)
 
+// Price for most inappropriate name. 
+// combine [[1;2;3]] [[4];[5];[6]] = [[4; 1; 2; 3]; [5; 1; 2; 3]; [6; 1; 2; 3]]
 let rec combine xss = function
   | [] -> []
   | ys::yss -> List.map ((@) ys) xss @ combine xss yss
 
+// Takes an expression and transforms it to a simplified expression as described above
 let rec simplify = function
   | FNum c -> [[ANum c]]
   | FVar s -> [[AExponent(s,1)]]
   | FAdd(e1,e2) -> simplify e1 @ simplify e2
-  | FMult(e1,e2) -> failwith "combine ...TO BE IMPLEMENTED"
-  | FExponent(e1,0) -> failwith "TO BE IMPLEMENTED"
-  | FExponent(e1,1) -> failwith "TO BE IMPLEMENTED"
-  | FExponent(e1,n) -> failwith "TO BE IMPLEMENTED"
+  | FMult(e1,e2) -> combine (simplify e1) (simplify e2)
+  | FExponent(e1,0) -> [[ANum 1.0]]
+  | FExponent(e1,1) -> simplify e1
+  | FExponent(e1,n) -> combine (simplify e1) (simplify (FExponent(e1, n-1)))
 
-let simplifyAtomGroup ag = failwith "TO BE IMPLEMENTED"
+// TEST
+let sphere = FAdd(FAdd(FAdd(FExponent(FVar "x",2),
+                            FExponent(FVar "y",2)),
+                       FExponent(FVar "z",2)),
+                  FMult(FNum -1.0,FVar "R"))
+let ex = FAdd(FVar "px", FMult(FVar "t",FVar "dx"))
+let ey = FAdd(FVar "py", FMult(FVar "t",FVar "dy"))
+let ez = FAdd(FVar "pz", FMult(FVar "t",FVar "dz"))
+let eR = FNum -1.0
+let sphereSubst = List.fold subst sphere [("x",ex);("y",ey);("z",ez);("R",eR)]
+let sphereSE = simplify sphereSubst
+ppSimpleExpr (SE sphereSE)
+// (simplify sphereSubst)
+// TEST END
+
+// Before inc 
+// let rec traverse k (m : Map<string, int>) = function
+//   | [] -> (k, m)
+//   | ANum(v):: ag' -> traverse (k * v) m ag'
+//   | AExponent(s, i) :: ag' ->
+//       match Map.tryFind s m with
+//       | None    -> traverse k (Map.add s i m) ag'
+//       | Some(v) -> traverse k (Map.add s (i + v) m) ag'
+// let (k, m) = traverse 1.0 Map.empty ag
+
+// Takes a map and a key-value pair, and adds the value to the old value if it exists, otherwise simply adds the value to the key
+let increaseKey m (k, v) = 
+  match Map.tryFind k m with
+  | None    -> Map.add k v m
+  | Some(v') -> Map.add k (v + v') m
+
+let simplifyAtomGroup ag = 
+  let inc (v, m) = function
+    | ANum(v') -> (v * v', m)
+    | AExponent(s, n) -> (v, increaseKey m (s, n))
+  let (k, m) = List.fold inc (1.0, Map.empty) ag
+  let exponents = List.map (fun (s, n) -> AExponent (s, n)) (Map.toList m)
+  match k with 
+  | 0.0 -> []
+  | 1.0 -> if List.isEmpty exponents then [ANum (1.0)] else exponents
+  | _ -> [ANum k;] @ exponents
+
+// TESTING
+// simplifyAtomGroup [ANum -1.0; ANum -1.0]
+// simplifyAtomGroup [AExponent ("py",1); AExponent ("py",1)];
+// simplifyAtomGroup [AExponent ("dz",1); AExponent ("t",1); AExponent ("pz",1)]
+// simplifyAtomGroup [AExponent ("dz",1); AExponent ("t",1); AExponent ("dz",1); AExponent ("t",1)]
+// simplifyAtomGroup [AExponent ("px",1); AExponent ("px",2); ANum -2.0; ANum -2.0]
+// TESTING END
+
 
 let simplifySimpleExpr (SE ags) =
-  let ags' = List.map simplifyAtomGroup ags
+  let ags' = List.map simplifyAtomGroup ags 
   // Add atom groups with only constants together.
-  failwith "TO BE IMPLEMENTED"
-  // Last task is to group similar atomGroups into one group.
-  failwith "TO BE IMPLEMENTED"
+  let sumCon a = function
+  | [ANum v] -> v + a
+  | _ -> a
+  let sum = List.fold sumCon 0.0 ags'
+
+  // Last task is to group similar atomGroups into one group.  
+  let m = List.fold increaseKey Map.empty (List.map (fun x -> (x, 1)) ags)
+  let m' = List.map (fun (e, i) -> if i = 1 then e else ANum(float i)::e) (Map.toList m)
+  let m'' = List.filter (fun e -> match e with [ANum _] -> false | _ -> true) m'
+  SE ([ANum sum]::(m''))
+
 
 let exprToSimpleExpr e = simplifySimpleExpr (SE (simplify e))
+
+// TESTING
+//simplifySimpleExpr (SE [[ANum 3.0];[ANum 4.0]; [AExponent("x",2); AExponent("y",3)]; [AExponent("x",2); AExponent("y",3)]]) // SE [[ANum 7.0]; [ANum 2.0; AExponent ("x",2); AExponent ("y",3)]]
+
+// ppSimpleExpr <| exprToSimpleExpr sphereSubst // As of 3:42: Currently has error
+
+// TEST END
+
+
+
 
 type poly = P of Map<int,simpleExpr>
 
@@ -67,8 +208,7 @@ let splitAG v m = function
   | [] -> m
   | ag ->
     let eqV = function AExponent(v',_) -> v = v' | _ -> false
-    let addMap d ag m = 
-      failwith "TO BE IMPLEMENTED"
+    let addMap d ag m = Map.add d (SE [ag]) m
     match List.tryFind eqV ag with
       | Some (AExponent(_,d)) ->
         let ag' = List.filter (not << eqV) ag
