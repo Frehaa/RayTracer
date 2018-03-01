@@ -1,6 +1,6 @@
 module ExprToPoly
 
-#load "ExprParse.fs"
+//  #load "ExprParse.fs"
 
 open ExprParse
 open System.Windows.Forms
@@ -176,10 +176,10 @@ let simplifySimpleExpr (SE ags) =
   let sum = List.fold sumCon 0.0 ags'
 
   // Last task is to group similar atomGroups into one group.  
-  let m = List.fold increaseKey Map.empty (List.map (fun x -> (x, 1)) ags)
+  let m = List.fold increaseKey Map.empty (List.map (fun x -> (x, 1)) ags')
   let m' = List.map (fun (e, i) -> if i = 1 then e else ANum(float i)::e) (Map.toList m)
   let m'' = List.filter (fun e -> match e with [ANum _] -> false | _ -> true) m'
-  SE ([ANum sum]::(m''))
+  if sum = 0.0 then SE m'' else SE ([ANum sum]::(m''))
 
 
 let exprToSimpleExpr e = simplifySimpleExpr (SE (simplify e))
@@ -189,10 +189,13 @@ let exprToSimpleExpr e = simplifySimpleExpr (SE (simplify e))
 
 // ppSimpleExpr <| exprToSimpleExpr sphereSubst // As of 3:42: Currently has error
 
+// let es = List.map (fun n -> FExponent (FAdd (FVar "a", FVar "b"), n)) [1 .. 5]
+
+// let s = simplify (FExponent (FAdd (FVar "a",FVar "b"),2))
+// simplifySimpleExpr (SE s)
+// simplifyAtomGroup [AExponent ("a",1); AExponent ("a",1)]
+
 // TEST END
-
-
-
 
 type poly = P of Map<int,simpleExpr>
 
@@ -208,19 +211,21 @@ let splitAG v m = function
   | [] -> m
   | ag ->
     let eqV = function AExponent(v',_) -> v = v' | _ -> false
-    let addMap d ag m = Map.add d (SE [ag]) m
+    let addMap d ag m = 
+      match Map.tryFind d m with
+      | Some (SE (ags')) -> Map.add d (SE (ag::ags')) m
+      | None -> Map.add d (SE [ag]) m    
     match List.tryFind eqV ag with
-      | Some (AExponent(_,d)) ->
-        let ag' = List.filter (not << eqV) ag
-        addMap d ag' m
-      | Some _ -> failwith "splitAG: Must never come here! - ANum will not match eqV"
-      | None -> addMap 0 ag m
+    | Some (AExponent(_, d)) ->
+          let ag' = List.filter (not << eqV) ag
+          addMap d ag' m
+    | Some _ -> failwith "splitAG: Must never come here! - ANum will not match eqV"
+    | None -> addMap 0 ag m
 
 let simpleExprToPoly (SE ags) v =
   P (List.fold (splitAG v) Map.empty ags)
 
 let exprToPoly e v = (exprToSimpleExpr >> simplifySimpleExpr >> simpleExprToPoly) e v
-
 
 (* Test Examples *)
 (*
@@ -231,6 +236,12 @@ let ex = FAdd (FVar "ox", FMult (FVar "t", FVar "dx"))
 let ey = FAdd (FVar "oy", FMult (FVar "t", FVar "dy"))
 let ez = FAdd (FVar "oz", FMult (FVar "t", FVar "dz"))
 let planeSubst = List.fold subst plane [("x",ex);("y",ey);("z",ez)] 
+
+let simplifyPlane = simplify planeSubst
+let simplePlane = simplifySimpleExpr (SE simplifyPlane)
+
+simpleExprToPoly simplePlane "t"
+
 let plane_d = exprToPoly planeSubst "t"
 let _ = printf "%s\n" (ppPoly "t" plane_d)
 (* Correct result for plane (d+c*oz+b*oy+a*ox)+t(c*dz+b*dy+a*dx) *)
